@@ -364,6 +364,7 @@ plot_extension_vs_metric <- function(data, metric, extension_col, title_prefix =
     theme_minimal()
 }
 
+
 # RMSD backbone peptide vs domain extension
 plot_extension_vs_metric(merged_data, "RMSD_backbone_peptide_sample", "domain_ext_index", "Domain Extension: ")
 
@@ -443,6 +444,44 @@ ggplot(heatmap_data_complete, aes(x = as.factor(domain_ext_index),
     plot.title = element_text(size = 14, face = "bold")
   )
 
+
+#HEATMAP 2 WITH HIGHEST RANK SAMPLES
+
+
+# STEP 1: Filter only top-ranked model per prediction
+top_models <- merged_data %>%
+  group_by(domain_ext_index, motif_ext_index) %>%
+  slice_max(order_by = ranking_score, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+# STEP 2: Ensure full grid is represented
+heatmap_data_complete <- top_models %>%
+  complete(domain_ext_index = 0:3,
+           motif_ext_index = 0:6,
+           fill = list(RMSD_all_atom_peptide_fold_change = NA))
+
+# STEP 3: Plot the heatmap directly from top model data
+ggplot(heatmap_data_complete, aes(x = as.factor(domain_ext_index), 
+                                  y = as.factor(motif_ext_index), 
+                                  fill = RMSD_all_atom_peptide_fold_change)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(RMSD_all_atom_peptide_fold_change, 2)), size = 3, na.rm = TRUE) +
+  scale_fill_distiller(palette = "RdBu", direction = -1,
+                       limits = c(-2.5, 0.5),
+                       oob = scales::squish,
+                       name = expression(log[2](RMSD[min]/RMSD[ext]))) +
+  labs(
+    title = "AF3 known extension",
+    x = "Domain extension step",
+    y = "Motif extension step"
+  ) +
+  scale_y_discrete(limits = rev(as.character(0:6))) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    plot.title = element_text(size = 14, face = "bold")
+  )
 
 # MIRRORED BAR PLOT FOR AF2 AND AF3
 library(dplyr)
