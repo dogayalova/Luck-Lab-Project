@@ -22,7 +22,8 @@ intersect(names(samples), names(reference))
 # Check the names in the merged data to see if it has both ref and sample
 names(merged_data)
 
-nrow(merged_data)  # how many matched samples you now have
+# How many matched samples you now have
+nrow(merged_data)  
 
 #Calculate differences
 merged_data <- merged_data %>%
@@ -54,7 +55,7 @@ merged_data$PredictionID <- seq_len(nrow(merged_data))
 write.csv(merged_data[, c("PredictionID", "prediction_name")], "prediction_id_mapping.csv", row.names = FALSE)
 
 
-# Bar plots of percentage differences for all metrics
+# BAR PLOTS of percentage differences for all metrics
 
 # 1. RMSD Backbone Peptide
 ggplot(merged_data, aes(x = PredictionID, y = perc_diff_RMSD_backbone_peptide)) +
@@ -307,10 +308,7 @@ View(motif_extension_comparison)
 
 
 
-
-
-
-
+#PLOTS FOR EACH CLASS
 
 
 # Scatter plot
@@ -445,8 +443,8 @@ ggplot(heatmap_data_complete, aes(x = as.factor(domain_ext_index),
   )
 
 
-#HEATMAP 2 WITH HIGHEST RANK SAMPLES
 
+#HEATMAP 2 WITH HIGHEST RANK SAMPLES
 
 # STEP 1: Filter only top-ranked model per prediction
 top_models <- merged_data %>%
@@ -483,34 +481,37 @@ ggplot(heatmap_data_complete, aes(x = as.factor(domain_ext_index),
     plot.title = element_text(size = 14, face = "bold")
   )
 
-# MIRRORED BAR PLOT FOR AF2 AND AF3
+
+# MIRRORED BAR PLOT FOR AF2 AND AF3 WITH LONGEST NAME AND ONE EXAMPLE PER 30 GROUPS
 library(dplyr)
 library(ggplot2)
 library(stringr)
 library(tidyr)
 
-# 0. Add `base_name` column by splitting before 'M'
+# 0. Define group by splitting before first 'M'
 merged_data <- merged_data %>%
-  mutate(base_name = str_extract(prediction_name, "^[^M]+"))
+  mutate(prediction_group = str_extract(prediction_name, "^[^M]+"))
 
-# 1. Filter only _DFL rows
+# 1. Filter only _DFL predictions
 dfl_data <- merged_data %>%
   filter(str_detect(prediction_name, "_DFL$"))
 
-# 2. Take one sample per extension group
-representatives <- dfl_data %>%
-  group_by(base_name, domain_ext_index, motif_ext_index) %>%
-  slice(1) %>%  # take the first one
+# 2. Keep the longest prediction_name per group
+representatives_all <- merged_data %>%
+  mutate(prediction_group = str_extract(prediction_name, "^[^M]+")) %>%
+  group_by(prediction_group) %>%
+  slice_max(order_by = nchar(prediction_name), n = 1, with_ties = FALSE) %>%
   ungroup()
 
-# 3. Create a long format table with AF2 and AF3 values
-long_data <- representatives %>%
-  mutate(PredictionID = paste(base_name, domain_ext_index, motif_ext_index, sep = "_")) %>%
-  select(PredictionID, base_name, domain_ext_index, motif_ext_index,
+
+# 3. Prepare long-format data for plotting
+long_data <- representatives_all %>%
+  mutate(PredictionID = prediction_name) %>%
+  select(PredictionID, prediction_group, domain_ext_index, motif_ext_index,
          AF2 = RMSD_all_atom_peptide_ref,
          AF3 = RMSD_all_atom_peptide_sample) %>%
   pivot_longer(cols = c("AF2", "AF3"), names_to = "Method", values_to = "RMSD") %>%
-  mutate(RMSD = ifelse(Method == "AF3", -RMSD, RMSD))  # Mirror AF3 bars downward
+  mutate(RMSD = ifelse(Method == "AF3", -RMSD, RMSD))  # Mirror AF3 values downward
 
 # 4. Plot mirrored bar plot
 ggplot(long_data, aes(x = PredictionID, y = RMSD, fill = Method)) +
@@ -518,7 +519,7 @@ ggplot(long_data, aes(x = PredictionID, y = RMSD, fill = Method)) +
   geom_hline(yintercept = 0, color = "black") +
   scale_fill_manual(values = c("AF2" = "#1f78b4", "AF3" = "#e31a1c")) +
   labs(title = "Mirrored RMSD All Atom Peptide: AF2 vs AF3",
-       x = "Prediction Extension Group",
+       x = "Prediction Name (Longest per Group)",
        y = "RMSD (Å)") +
   theme_minimal() +
   theme(
@@ -526,8 +527,11 @@ ggplot(long_data, aes(x = PredictionID, y = RMSD, fill = Method)) +
     plot.title = element_text(size = 14, face = "bold")
   )
 
-representatives %>%
-  select(prediction_name, base_name, domain_ext_index, motif_ext_index)
+# 5. Optional: Print selected representatives
+representatives_all %>%
+  select(prediction_name, prediction_group, domain_ext_index, motif_ext_index)
+
+
 
 # RANDOM SEEDS BARPLOT MIRROR
 library(dplyr)
@@ -538,7 +542,7 @@ merged_data <- merged_data %>%
   mutate(base_name = sub("M.*", "", prediction_name))
 
 # Step 2: Randomly select one prediction_name per base_name
-set.seed(42)  # for reproducibility
+#set.seed(42)  # for reproducibility
 representative_names <- merged_data %>%
   group_by(base_name) %>%
   slice_sample(n = 1) %>%
